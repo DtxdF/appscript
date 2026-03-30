@@ -5,7 +5,7 @@ RM?=rm -f
 PREFIX?=/usr/local
 MANDIR?=${PREFIX}/share/man
 
-APPSCRIPT_VERSION?=0.0.1
+APPSCRIPT_VERSION?=0.0.2
 
 all: install
 
