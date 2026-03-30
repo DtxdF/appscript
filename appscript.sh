@@ -125,7 +125,7 @@ fi
 printf "%s" "\${COMPRESSED_FILE}" | base64 -d | tar -C "\${TEMPDIR}" -xf - || exit \$?
 
 APPSCRIPT_PWD="\${TEMPDIR}" \\
-    "\${TEMPDIR}/APPSCRIPT" "$@" || exit \$?
+    "\${TEMPDIR}/APPSCRIPT" "\$@" || exit \$?
 
 exit ${EX_OK}
 EOF
