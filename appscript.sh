@@ -89,6 +89,7 @@ set -T
 set -o pipefail
 
 APPSCRIPT_VERSION="${VERSION}"
+APPSCRIPT=\`realpath -- "\${0}"\` || exit \$?
 USE_TMPFS="${opt_use_tmpfs}"
 IGNORED_SIGNALS="SIGALRM SIGVTALRM SIGPROF SIGUSR1 SIGUSR2"
 HANDLER_SIGNALS="SIGHUP SIGINT SIGQUIT SIGTERM SIGXCPU SIGXFSZ"
@@ -125,6 +126,7 @@ fi
 printf "%s" "\${COMPRESSED_FILE}" | base64 -d | tar -C "\${TEMPDIR}" -xf - || exit \$?
 
 APPSCRIPT_PWD="\${TEMPDIR}" \\
+APPSCRIPT_SCRIPT="\${APPSCRIPT}" \\
     "\${TEMPDIR}/APPSCRIPT" "\$@" || exit \$?
 
 exit ${EX_OK}
