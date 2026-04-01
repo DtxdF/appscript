@@ -3,7 +3,7 @@ NAME
 
 SYNOPSIS
      appscript -v
-     appscript [-t] [-c [gzip|xz|zstd]] [-o filename] directory
+     appscript [-Lt] [-c [gzip|xz|zstd]] [-o filename] directory
 
 DESCRIPTION
      appscript is a very lightweight script that compresses a directory using
@@ -27,6 +27,10 @@ DESCRIPTION
      appjail(1) to run applications (possibly with appjail-x11(1)) in an
      isolated and disposable manner. From the user's perspective, it's like
      running an application with a single click.
+
+     -L   All symbolic links will be followed.
+	  Normally, symbolic links are archived as such. With this option, the
+	  target of the link will be archived instead.
 
      -v   Display version information about appscript.
 
@@ -53,6 +57,9 @@ ENVIRONMENT
 	  Since APPSCRIPT runs from the current user's working directory, it
 	  does not know the location of the temporary directory. This
 	  environment variable specifies that location.
+
+     APPSCRIPT_SCRIPT
+	  Absolute path to the AppScript that is currently running.
 
 SEE ALSO
      appjail(1) tar(1) base64(1)

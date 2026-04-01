@@ -40,12 +40,16 @@ set -o pipefail
 main()
 {
     local _o
+    local opt_dereference=false
     local opt_use_tmpfs=false
     local compress_algo="xz"
     local filename="/dev/stdout"
 
-    while getopts ":tvc:o:" _o; do
+    while getopts ":Ltvc:o:" _o; do
         case "${_o}" in
+            L)
+                opt_dereference=true
+                ;;
             t)
                 opt_use_tmpfs="${OPTARG}"
                 ;;
@@ -79,8 +83,14 @@ main()
         *) usage; exit ${EX_USAGE} ;;
     esac
 
+    local tar_args=
+
+    if ${opt_dereference}; then
+        tar_args="-L"
+    fi
+
     local compressed_file
-    compressed_file=`tar -C "${directory}" --${compress_algo} -cf - . | base64 -w 0` || exit $?
+    compressed_file=`tar ${tar_args} -C "${directory}" --${compress_algo} -cf - . | base64 -w 0` || exit $?
 
     cat << EOF > "${filename}" || exit $?
 #!/bin/sh
@@ -148,7 +158,7 @@ usage()
 {
     cat << EOF
 usage: appscript -v
-       appscript [-t] [-c [gzip|xz|zstd]] [-o <filename>] <directory>
+       appscript [-Lt] [-c [gzip|xz|zstd]] [-o <filename>] <directory>
 EOF
 }
 
