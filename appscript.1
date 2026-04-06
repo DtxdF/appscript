@@ -45,8 +45,9 @@ is a very lightweight and easy-to-use tool for creating self-extracting executab
 .Pp
 From the developer's perspective,
 .Xr tar 1
-is used to compress a directory, called the
+is used to compress a directory into a tarball, known as the
 .Dq payload,
+which is stored in the .rodata section,
 .Xr objcopy 1
 to convert the payload into a valid
 .Xr elf 3 object file, and then
