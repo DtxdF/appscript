@@ -35,23 +35,27 @@ VERSION="%%VERSION%%"
 EX_OK=0
 EX_USAGE=64
 
+# Signals
+IGNORED_SIGNALS="SIGALRM SIGVTALRM SIGPROF SIGUSR1 SIGUSR2"
+HANDLER_SIGNALS="SIGHUP SIGINT SIGQUIT SIGTERM SIGXCPU SIGXFSZ"
+
+BUILDDIR=
+PREFIX="%%PREFIX%%"
+SHAREDIR="${PREFIX}/share/appscript"
+
 set -o pipefail
 
 main()
 {
     local _o
-    local opt_dereference=false
-    local opt_use_tmpfs=false
-    local compress_algo="xz"
-    local filename="/dev/stdout"
+    local opt_dereference=false arg_dereference=
+    local compress_algo="zstd"
+    local filename="a.AppScript"
 
-    while getopts ":Ltvc:o:" _o; do
+    while getopts ":vLc:o:" _o; do
         case "${_o}" in
             L)
                 opt_dereference=true
-                ;;
-            t)
-                opt_use_tmpfs="${OPTARG}"
                 ;;
             v)
                 version
@@ -83,70 +87,54 @@ main()
         *) usage; exit ${EX_USAGE} ;;
     esac
 
-    local tar_args=
+    local format= machine_arch=
+
+    machine_arch=`uname -p` || exit $?
+
+    case "${machine_arch}" in
+        amd64) format="elf64-x86-64" ;;
+        *) log_err "Unsupported arch: ${machine_arch}" ;;
+    esac
+
+    trap '' ${IGNORED_SIGNALS}
+    trap "ERRLEVEL=\$?; cleanup; exit \${ERRLEVEL}" EXIT
+    trap "cleanup; exit 70" ${HANDLER_SIGNALS}
+
+    BUILDDIR=`mktemp -d -t appscript` || exit $?
 
     if ${opt_dereference}; then
-        tar_args="-L"
+        arg_dereference="-L"
     fi
 
-    local compressed_file
-    compressed_file=`tar ${tar_args} -C "${directory}" --${compress_algo} -cf - . | base64 -w 0` || exit $?
+    tar ${arg_dereference} -c --${compress_algo} -C "${directory}" -f "${BUILDDIR}/payload" . || exit $?
 
-    cat << EOF > "${filename}" || exit $?
-#!/bin/sh
+    (
+        cd -- "${BUILDDIR}" &&
+            objcopy \
+                --input-target binary \
+                --output-target "${format}" \
+                --rename-section .data=.rodata,alloc,load,readonly,contents \
+                    payload payload.o &&
+            rm -f payload || exit $?
+    ) || exit $?
 
-set -T
-set -o pipefail
+    clang -O3 -s -pipe "${BUILDDIR}/payload.o" "${SHAREDIR}/stub.c" -o "${filename}" -larchive || exit $?
 
-APPSCRIPT_VERSION="${VERSION}"
-APPSCRIPT=\`realpath -- "\${0}"\` || exit \$?
-USE_TMPFS="${opt_use_tmpfs}"
-IGNORED_SIGNALS="SIGALRM SIGVTALRM SIGPROF SIGUSR1 SIGUSR2"
-HANDLER_SIGNALS="SIGHUP SIGINT SIGQUIT SIGTERM SIGXCPU SIGXFSZ"
-TEMPDIR=
-COMPRESSED_FILE="${compressed_file}"
+    exit ${EX_OK}
+}
 
-can_tmpfs()
+log_err()
 {
-    \${USE_TMPFS} && [ "\`sysctl -n vfs.usermount\`" -eq 1 ]
+    echo "===> $*" >&2
 }
 
 cleanup()
 {
-    trap '' \${HANDLER_SIGNALS} EXIT
-    if [ -n "\${TEMPDIR}" ]; then
-        if can_tmpfs; then
-            umount -- "\${TEMPDIR}" > /dev/null 2>&1
-        fi
-        rm -rf -- "\${TEMPDIR}" > /dev/null 2>&1
+    trap '' ${HANDLER_SIGNALS} EXIT
+    if [ -n "${BUILDDIR}" ]; then
+        rm -rf -- "${BUILDDIR}" > /dev/null 2>&1
     fi
-    trap - \${IGNORED_SIGNALS} \${HANDLER_SIGNALS} EXIT
-}
-
-trap '' \${IGNORED_SIGNALS}
-trap "ERRLEVEL=\\\$?; cleanup; exit \\\${ERRLEVEL}" EXIT
-trap "cleanup; exit 70" \${HANDLER_SIGNALS}
-
-TEMPDIR=\`mktemp -d -t appscript\` || exit \$?
-
-if can_tmpfs; then
-    mount -t tmpfs tmpfs "\${TEMPDIR}"
-fi
-
-printf "%s" "\${COMPRESSED_FILE}" | base64 -d | tar -C "\${TEMPDIR}" -xf - || exit \$?
-
-APPSCRIPT_PWD="\${TEMPDIR}" \\
-APPSCRIPT_SCRIPT="\${APPSCRIPT}" \\
-    "\${TEMPDIR}/APPSCRIPT" "\$@" || exit \$?
-
-exit ${EX_OK}
-EOF
-
-    if [ -f "${filename}" ]; then
-        chmod +x "${filename}" || exit $?
-    fi
-
-    exit ${EX_OK}
+    trap - ${IGNORED_SIGNALS} ${HANDLER_SIGNALS} EXIT
 }
 
 version()
@@ -158,7 +146,7 @@ usage()
 {
     cat << EOF
 usage: appscript -v
-       appscript [-Lt] [-c [gzip|xz|zstd]] [-o <filename>] <directory>
+       appscript [-L] [-c [gzip|xz|zstd]] [-o <filename>] <directory>
 EOF
 }
 
