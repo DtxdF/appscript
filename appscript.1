@@ -138,6 +138,53 @@ specifies that location.
 .It Ev APPSCRIPT_SCRIPT
 Absolute path to the AppScript that is currently running.
 .El
+.Sh EXAMPLES
+.Ss Improving performance
+If you are the sovereign of your system, users will appreciate you if you enable
+.Xr tmpfs 4
+at
+.Pa /var/tmp/appscript
+for very large AppScripts:
+.Bd -literal -offset indent
+# /etc/fstab
+tmpfs   /var/tmp/appscript  tmpfs   rw,size=1G,mode=1777  0   0
+.Ed
+.Pp
+Then:
+.Bd -literal -offset indent
+# mkdir -p /var/tmp/appscript
+# mount /var/tmp/appscript
+.Ed
+.Ss The Do Hello World Dc example
+To create the most basic AppScript all you have to do is create a directory:
+.Bd -literal -offset indent
+$ mkdir hello-world
+.Ed
+.Pp
+Create the
+.Sy APPSCRIPT
+file:
+.Bd -literal -offset indent
+$ cat << EOF > ./hello-world/APPSCRIPT
+#!/bin/sh
+
+echo "Hello, world!"
+EOF
+.Ed
+.Pp
+And set the execute bit:
+.Bd -literal -offset indent
+$ chmod +x ./hello-world/APPSCRIPT
+.Ed
+.Pp
+To finally create the AppScript:
+.Bd -literal -offset indent
+$ appscript ./hello-world
+$ ls
+./a.AppScript
+$ ./a.AppScript
+Hello, world!
+.Ed
 .Sh SEE ALSO
 .Xr tar 1
 .Xr libarchive 3
