@@ -165,7 +165,7 @@ Create the
 .Sy APPSCRIPT
 file:
 .Bd -literal -offset indent
-$ cat << EOF > ./hello-world/APPSCRIPT
+$ cat << EOF > \&./hello-world/APPSCRIPT
 #!/bin/sh
 
 echo "Hello, world!"
@@ -174,15 +174,15 @@ EOF
 .Pp
 And set the execute bit:
 .Bd -literal -offset indent
-$ chmod +x ./hello-world/APPSCRIPT
+$ chmod +x \&./hello-world/APPSCRIPT
 .Ed
 .Pp
 To finally create the AppScript:
 .Bd -literal -offset indent
-$ appscript ./hello-world
+$ appscript \&./hello-world
 $ ls
-./a.AppScript
-$ ./a.AppScript
+\&./a.AppScript
+$ \&./a.AppScript
 Hello, world!
 .Ed
 .Sh SEE ALSO

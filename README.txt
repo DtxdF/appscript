@@ -105,6 +105,7 @@ EXAMPLES
 
 	   $ appscript ./hello-world
 	   $ ls
+	   ./a.AppScript
 	   $ ./a.AppScript
 	   Hello, world!
 
