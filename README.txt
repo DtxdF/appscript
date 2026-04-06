@@ -9,21 +9,22 @@ DESCRIPTION
      appscript is a very lightweight and easy-to-use tool for creating self-
      extracting executables.
 
-     From the developer's perspective, tar(1) is used to compress a directory,
-     called the "payload," objcopy(1) to convert the payload into a valid
-     elf(3) object file, and then clang(1) to compile the payload with the C-
-     written stub. And from the user's perspective, it just need to run the
-     executable file, and the magic happens behind the scenes: the AppScript
-     (the SFX file) reads the addresses where the payload is located and uses
-     libarchive(3) to extract the files to a temporary directory, finally
-     executing an executable file named APPSCRIPT. The user can pass any
-     environment variables and arguments to the AppScript, and the APPSCRIPT
-     executable can handle them just like any other program or script.
+     From the developer's perspective, tar(1) is used to compress a directory
+     into a tarball, known as the "payload," which is stored in the .rodata
+     section, objcopy(1) to convert the payload into a valid elf(3) object
+     file, and then clang(1) to compile the payload with the C-written stub.
+     And from the user's perspective, it just need to run the executable file,
+     and the magic happens behind the scenes: the AppScript (the SFX file)
+     reads the addresses where the payload is located and uses libarchive(3)
+     to extract the files to a temporary directory, finally executing an
+     executable file named APPSCRIPT. The user can pass any environment
+     variables and arguments to the AppScript, and the APPSCRIPT executable
+     can handle them just like any other program or script.
 
-     But the AppScript does much more than described above. First, it sets
-     handlers for SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGXCPU, and SIGXFSZ to
-     stop the AppScript when it's running.  SIGALRM, SIGVTALRM, SIGPROF,
-     SIGUSR1, and SIGUSR2 are ignored. Next, it checks if the
+     However, an AppScript does much more than what has been described above.
+     First, it sets handlers for SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGXCPU,
+     and SIGXFSZ to stop the AppScript when it's running.  SIGALRM, SIGVTALRM,
+     SIGPROF, SIGUSR1, and SIGUSR2 are ignored. Next, it checks if the
      /var/tmp/appscript directory exists and, if so, uses it to create
      temporary directories; otherwise, /tmp is used as fallback. The reason
      /var/tmp/appscript is preferred is that a system administrator can
@@ -43,7 +44,7 @@ DESCRIPTION
      owner must be the same as the effective uid, which should be the case
      since the uid and gid are changed to the caller when the files are
      extracted. As a final task, the temporary directory is recursively
-     removed in a similar way to the -r -and -f flags in rm(1).
+     removed in a similar way to the -r and -f flags in rm(1).
 
      -L   All symbolic links will be followed.
 	  Normally, symbolic links are archived as such. With this option, the
@@ -68,6 +69,44 @@ ENVIRONMENT
 
      APPSCRIPT_SCRIPT
 	  Absolute path to the AppScript that is currently running.
+
+EXAMPLES
+   Improving performance
+     If you are the sovereign of your system, users will appreciate you if you
+     enable tmpfs(4) at /var/tmp/appscript for very large AppScripts:
+
+	   # /etc/fstab
+	   tmpfs   /var/tmp/appscript  tmpfs   rw,size=1G,mode=1777  0	 0
+
+     Then:
+
+	   # mkdir -p /var/tmp/appscript
+	   # mount /var/tmp/appscript
+
+   The "Hello World" example
+     To create the most basic AppScript all you have to do is create a
+     directory:
+
+	   $ mkdir hello-world
+
+     Create the APPSCRIPT file:
+
+	   $ cat << EOF > ./hello-world/APPSCRIPT
+	   #!/bin/sh
+
+	   echo "Hello, world!"
+	   EOF
+
+     And set the execute bit:
+
+	   $ chmod +x ./hello-world/APPSCRIPT
+
+     To finally create the AppScript:
+
+	   $ appscript ./hello-world
+	   $ ls
+	   $ ./a.AppScript
+	   Hello, world!
 
 SEE ALSO
      tar(1) libarchive(3) signal(3) sysexits(3)
