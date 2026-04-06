@@ -1,6 +1,5 @@
 NAME
-     appscript - Simple, lightweight and effective tool for creating self-
-     extracting executables
+     appscript - Simple, lightweight and effective tool for creating SFX files
 
 SYNOPSIS
      appscript -v
