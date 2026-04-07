@@ -167,8 +167,10 @@ main(int argc, char **argv)
             warnx("archive_read_extract2(%s) (%d): %s", entry_pathname,
                 archive_errno(ext), archive_error_string(ext));
         }
-        if (ret == ARCHIVE_FATAL)
+        if (ret == ARCHIVE_FATAL) {
+            is_error = true;
             break;
+        }
     }
 
     if (archive_read_close(a) != ARCHIVE_OK) {
