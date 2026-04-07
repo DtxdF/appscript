@@ -76,7 +76,7 @@ EXAMPLES
      enable tmpfs(4) at /var/tmp/appscript for very large AppScripts:
 
 	   # /etc/fstab
-	   tmpfs   /var/tmp/appscript  tmpfs   rw,size=1G,mode=1777  0	 0
+	   tmpfs   /var/tmp/appscript  tmpfs   rw,size=1G,mode=1777,late  0   0
 
      Then:
 
