@@ -50,6 +50,8 @@ DESCRIPTION
 	  Normally, symbolic links are archived as such. With this option, the
 	  target of the link will be archived instead.
 
+     -s   Tells the linker to create a statically linked executable.
+
      -v   Display version information about appscript.
 
      -o filename

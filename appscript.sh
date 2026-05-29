@@ -49,13 +49,17 @@ main()
 {
     local _o
     local opt_dereference=false arg_dereference=
+    local opt_static=false
     local compress_algo="zstd"
     local filename="a.AppScript"
 
-    while getopts ":vLc:o:" _o; do
+    while getopts ":Lsvc:o:" _o; do
         case "${_o}" in
             L)
                 opt_dereference=true
+                ;;
+            s)
+                opt_static=true
                 ;;
             v)
                 version
@@ -118,7 +122,13 @@ main()
             rm -f payload || exit $?
     ) || exit $?
 
-    clang -O3 -s -pipe "${BUILDDIR}/payload.o" "${SHAREDIR}/stub.c" -o "${filename}" -larchive || exit $?
+    local static_args=
+
+    if ${opt_static}; then
+        static_args="-static -lbz2 -lz -lprivatezstd -llzma -lmd -lcrypto -lbsdxml -lpthread"
+    fi
+
+    clang -O3 -s -pipe "${BUILDDIR}/payload.o" "${SHAREDIR}/stub.c" -o "${filename}" -larchive ${static_args} || exit $?
 
     exit ${EX_OK}
 }
@@ -146,7 +156,7 @@ usage()
 {
     cat << EOF
 usage: appscript -v
-       appscript [-L] [-c [gzip|xz|zstd]] [-o <filename>] <directory>
+       appscript [-Ls] [-c [gzip|xz|zstd]] [-o <filename>] <directory>
 EOF
 }
 
