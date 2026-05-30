@@ -15,6 +15,7 @@ install:
 	${MKDIR} -m 755 -p "${DESTDIR}${MANDIR}"
 	${MKDIR} -m 755 -p "${DESTDIR}${MANDIR}/man1"
 	${INSTALL} -m 444 appscript.1 "${DESTDIR}${MANDIR}/man1/appscript.1"
+	${SED} -e 's|%%PREFIX%%|${PREFIX}|' "${DESTDIR}${MANDIR}/man1/appscript.1"
 	${MKDIR} -m 755 -p "${DESTDIR}${PREFIX}/bin"
 	${INSTALL} -m 444 stub.c "${DESTDIR}${PREFIX}/share/appscript/stub.c"
 	${INSTALL} -m 555 appscript.sh "${DESTDIR}${PREFIX}/bin/appscript"

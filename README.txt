@@ -3,7 +3,7 @@ NAME
 
 SYNOPSIS
      appscript -v
-     appscript [-L] [-c [gzip|xz|zstd]] [-o filename] directory
+     appscript [-L] [-a arch] [-c algo] [-o filename] [-S sysroot] directory
 
 DESCRIPTION
      appscript is a very lightweight and easy-to-use tool for creating self-
@@ -54,8 +54,28 @@ DESCRIPTION
 
      -v   Display version information about appscript.
 
+     -a arch
+	  Specifies an architecture for the binary other than the default,
+	  which is the same as the host. Valid arguments are: amd64, aarch64,
+	  armv7, i386, riscv64, powerpc, powerpc64, and powerpc64le.
+
+     -c algo
+	  Compression algorithm to be used to compress the directory. Valid
+	  arguments: gzip, xz, and zstd. The default is zstd.
+
      -o filename
 	  Name of the resulting executable. By default, a.AppScript.
+
+     -S sysroot
+	  Tells clang(1) to use a specified directory as the logical root
+	  directory for resolving system headers and libraries.
+
+	  By default, when no argument is specified, it uses the
+	  %%PREFIX%%/freebsd-sysroot/arch directory only if it exists;
+	  otherwise, it falls back to /. If you have installed the
+	  arch-freebsd-sysroot package, this should work correctly, but this
+	  parameter is primarily necessary when you need to cross-compile a
+	  statically linked binary.
 
      directory
 	  Directory to be compressed.

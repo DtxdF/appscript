@@ -50,10 +50,13 @@ main()
     local _o
     local opt_dereference=false arg_dereference=
     local opt_static=false
+    local machine_arch=
     local compress_algo="zstd"
+    local target=
     local filename="a.AppScript"
+    local sysroot=
 
-    while getopts ":Lsvc:o:" _o; do
+    while getopts ":Lsva:c:o:S:" _o; do
         case "${_o}" in
             L)
                 opt_dereference=true
@@ -65,11 +68,17 @@ main()
                 version
                 exit ${EX_OK}
                 ;;
+            a)
+                machine_arch="${OPTARG}"
+                ;;
             c)
                 compress_algo="${OPTARG}"
                 ;;
             o)
                 filename="${OPTARG}"
+                ;;
+            S)
+                sysroot="${OPTARG}"
                 ;;
             *)
                 usage
@@ -91,14 +100,29 @@ main()
         *) usage; exit ${EX_USAGE} ;;
     esac
 
-    local format= machine_arch=
+    local format=
 
-    machine_arch=`uname -p` || exit $?
+    machine_arch="${machine_arch:-`uname -p`}" || exit $?
 
     case "${machine_arch}" in
         amd64) format="elf64-x86-64" ;;
+        aarch64) format="elf64-littleaarch64" ;;
+        armv7) format="elf32-littlearm" ;;
+        i386) format="elf32-i386" ;;
+        riscv64) format="elf64-littleriscv" ;;
+        powerpc) format="elf32-powerpc" ;;
+        powerpc64) format="elf64-powerpc" ;;
+        powerpc64le) format="elf64-powerpcle" ;;
         *) log_err "Unsupported arch: ${machine_arch}" ;;
     esac
+
+    if [ -z "${sysroot}" ]; then
+        sysroot="${PREFIX}/freebsd-sysroot/${machine_arch}"
+
+        if [ ! -d "${sysroot}" ]; then
+            sysroot="/"
+        fi
+    fi
 
     trap '' ${IGNORED_SIGNALS}
     trap "ERRLEVEL=\$?; cleanup; exit \${ERRLEVEL}" EXIT
@@ -128,7 +152,9 @@ main()
         static_args="-static -lbz2 -lz -lprivatezstd -llzma -lmd -lcrypto -lbsdxml -lpthread"
     fi
 
-    clang -O3 -s -pipe "${BUILDDIR}/payload.o" "${SHAREDIR}/stub.c" -o "${filename}" -larchive ${static_args} || exit $?
+    clang -O3 -s -pipe --sysroot="${sysroot}" \
+        -target "${machine_arch}-unknown-freebsd" "${BUILDDIR}/payload.o" \
+        "${SHAREDIR}/stub.c" -o "${filename}" -larchive ${static_args} || exit $?
 
     exit ${EX_OK}
 }
@@ -156,7 +182,7 @@ usage()
 {
     cat << EOF
 usage: appscript -v
-       appscript [-Ls] [-c [gzip|xz|zstd]] [-o <filename>] <directory>
+       appscript [-Ls] [-a <arch>] [-c <algo>] [-o <filename>] [-S <sysroot>] <directory>
 EOF
 }
 
