@@ -71,11 +71,11 @@ DESCRIPTION
 	  directory for resolving system headers and libraries.
 
 	  By default, when no argument is specified, it uses the
-	  %%PREFIX%%/freebsd-sysroot/arch directory only if it exists;
-	  otherwise, it falls back to /. If you have installed the
-	  arch-freebsd-sysroot package, this should work correctly, but this
-	  parameter is primarily necessary when you need to cross-compile a
-	  statically linked binary.
+	  %%PREFIX%%/freebsd-sysroot/arch directory only if it exists and if
+	  the host's machine architecture is the same as arch; otherwise, it
+	  falls back to /. If you have installed the arch-freebsd-sysroot
+	  package, this should work correctly, but this parameter is primarily
+	  necessary when you need to cross-compile a statically linked binary.
 
      directory
 	  Directory to be compressed.

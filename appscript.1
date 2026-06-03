@@ -25,7 +25,7 @@
 .\"CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 .\"OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 .\"OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-.Dd May 30, 2026
+.Dd June 03, 2026
 .Dt APPSCRIPT 1
 .Os
 .Sh NAME
@@ -142,7 +142,9 @@ system headers and libraries.
 .Pp
 By default, when no argument is specified, it uses the
 .Ns Pa %%PREFIX%%/freebsd-sysroot/ Ns Ar arch
-directory only if it exists; otherwise, it falls back to
+directory only if it exists and if the host's machine architecture is
+the same as
+.Ar arch Ns ; otherwise, it falls back to
 .Pa / Ns "."
 If you have installed the
 .Ar arch Ns -freebsd-sysroot

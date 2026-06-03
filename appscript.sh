@@ -119,7 +119,10 @@ main()
     if [ -z "${sysroot}" ]; then
         sysroot="${PREFIX}/freebsd-sysroot/${machine_arch}"
 
-        if [ ! -d "${sysroot}" ]; then
+        # If 'uname -p' is the same as '${machine_arch}', we should use
+        # '/' which is especially more important when '${opt_static}'
+        # is 'true'.
+        if [ ! -d "${sysroot}" ] || [ "${machine_arch}" = "`uname -p`" ]; then
             sysroot="/"
         fi
     fi
