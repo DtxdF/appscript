@@ -54,6 +54,8 @@ extern char **environ;
 extern char _binary_payload_start[];
 extern char _binary_payload_end[];
 
+static char *extractdir = NULL;
+static char tmpdir_tmpl[PATH_MAX];
 static int ignored_signals[] = {
     SIGALRM, SIGVTALRM, SIGPROF, SIGUSR1, SIGUSR2, 0
 };
@@ -61,8 +63,10 @@ static int handled_signals[] = {
     SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGXCPU, SIGXFSZ, 0
 };
 static volatile sig_atomic_t should_stop = 0;
+static volatile pid_t child_pid = 0;
 
 static char *whoami(void);
+static void cleanup(void);
 static void on_signal(int sig);
 static void ignore_signals(void);
 static void handle_signals(void);
@@ -75,8 +79,7 @@ main(int argc, char **argv)
     bool is_error = false;
     pid_t pid;
     const char *tmpdir, *entry_pathname;
-    char *iam, *extractdir;
-    char template[PATH_MAX];
+    char *iam;
     size_t payload_size;
     struct archive *a, *ext;
     struct archive_entry *entry;
@@ -92,6 +95,9 @@ main(int argc, char **argv)
     ignore_signals();
     handle_signals();
 
+    if (atexit(cleanup) != 0)
+        err(EX_SOFTWARE, "atexit");
+
     /* This should be a mounted tmpfs(4) fs. */
     tmpdir = _APPSCRIPT_DEFAULT_TMPDIR;
     if ((ret = lstat(tmpdir, &sbuf)) == -1)
@@ -103,10 +109,10 @@ main(int argc, char **argv)
     if (!(sbuf.st_mode & (S_ISVTX | S_IRWXU | S_IRWXG | S_IRWXO)))
         err(EX_NOPERM, "Operation not permitted");
 
-    if (snprintf(template, sizeof(template), "%s/%s", tmpdir, "appscript_XXXXXXXXXXX") < 0)
+    if (snprintf(tmpdir_tmpl, sizeof(tmpdir_tmpl), "%s/%s", tmpdir, "appscript_XXXXXXXXXXX") < 0)
         err(EX_SOFTWARE, "snprintf");
 
-    if ((extractdir = mkdtemp(template)) == NULL)
+    if ((extractdir = mkdtemp(tmpdir_tmpl)) == NULL)
         err(EX_SOFTWARE, "mkdtemp");
 
     if (chdir(extractdir) == -1)
@@ -196,12 +202,22 @@ main(int argc, char **argv)
             err(EX_SOFTWARE, "setenv");
         if (setenv("APPSCRIPT_SCRIPT", iam, 1) == -1)
             err(EX_SOFTWARE, "setenv");
-        ret = posix_spawn(&pid, "./APPSCRIPT", NULL, NULL, argv, environ);
+        posix_spawnattr_t pattr;
+        if (posix_spawnattr_init(&pattr) != 0)
+            err(EX_SOFTWARE, "posix_spawnattr_init");
+        posix_spawnattr_setflags(&pattr, POSIX_SPAWN_SETPGROUP);
+        posix_spawnattr_setpgroup(&pattr, 0);
+        ret = posix_spawn(&pid, "./APPSCRIPT", NULL, &pattr, argv, environ);
+        posix_spawnattr_destroy(&pattr);
         if (ret == 0) {
+            child_pid = pid;
             while (waitpid(pid, &status, 0) == -1) {
-                if (errno != EINTR)
+                if (errno != EINTR) {
+                    child_pid = 0;
                     return EX_SOFTWARE;
+                }
             }
+            child_pid = 0;
             if (WIFEXITED(status))
                 ret = WEXITSTATUS(status);
             else
@@ -212,8 +228,6 @@ main(int argc, char **argv)
         }
     }
 
-    rm_tree((char *[]){ extractdir, NULL });
-
     if (!should_stop && !is_error)
         return ret;
     else
@@ -221,9 +235,21 @@ main(int argc, char **argv)
 }
 
 static void
+cleanup(void)
+{
+    if (extractdir != NULL) {
+        rm_tree((char *[]){ extractdir, NULL });
+        extractdir = NULL;
+    }
+}
+
+static void
 on_signal(int sig)
 {
     should_stop = 1;
+
+    if (child_pid > 0)
+        kill(-child_pid, sig);
 }
 
 static void ignore_signals(void)
@@ -281,7 +307,8 @@ rm_tree(char **path_argv)
     if (!(fts = fts_open(path_argv, flags, NULL))) {
         if (errno == ENOENT)
             return;
-        err(EX_SOFTWARE, "fts_open");
+        warn("fts_open");
+        return;
     }
     while (errno = 0, (p = fts_read(fts)) != NULL) {
         switch (p->fts_info) {
@@ -292,7 +319,8 @@ rm_tree(char **path_argv)
             }
             continue;
         case FTS_ERR:
-            errx(EX_SOFTWARE, "%s: %s", p->fts_path, strerror(p->fts_errno));
+            warnx("%s: %s", p->fts_path, strerror(p->fts_errno));
+            return;
         case FTS_NS:
             /*
              * Assume that since fts_read() couldn't stat the

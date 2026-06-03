@@ -3,7 +3,7 @@ NAME
 
 SYNOPSIS
      appscript -v
-     appscript [-L] [-a arch] [-c algo] [-o filename] [-S sysroot] directory
+     appscript [-Ls] [-a arch] [-c algo] [-o filename] [-S sysroot] directory
 
 DESCRIPTION
      appscript is a very lightweight and easy-to-use tool for creating self-
@@ -45,6 +45,12 @@ DESCRIPTION
      since the uid and gid are changed to the caller when the files are
      extracted. As a final task, the temporary directory is recursively
      removed in a similar way to the -r and -f flags in rm(1).
+
+     APPSCRIPT runs in a new process group, and when its parent process (the
+     AppScript executable) receives a handled signal (such as those mentioned
+     above), it forwards the signal to the entire APPSCRIPT's process group.
+
+     The options are as follows:
 
      -L   All symbolic links will be followed.
 	  Normally, symbolic links are archived as such. With this option, the

@@ -35,7 +35,7 @@
 .Nm
 .Fl v
 .Nm
-.Op Fl L
+.Op Fl Ls
 .Op Fl a Ar arch
 .Op Fl c Ar algo
 .Op Fl o Ar filename
@@ -108,6 +108,15 @@ and
 .Fl f
 flags in
 .Xr rm 1 Ns "."
+.Pp
+.Sy APPSCRIPT
+runs in a new process group, and when its parent process
+.Pq the AppScript executable
+receives a handled signal
+.Po such as those mentioned above Pc Ns , it forwards the signal to the entire
+.Sy APPSCRIPT Ns 's process group.
+.Pp
+The options are as follows:
 .Pp
 .Bl -tag -width xxx
 .It Fl L
