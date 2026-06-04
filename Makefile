@@ -28,4 +28,4 @@ uninstall:
 	${RM} -r "${DESTDIR}${PREFIX}/share/appscript"
 
 docs:
-	@mandoc -T ascii appscript.1 | col -b | tail +3 | sed -e '$$d' | sed -e '$$d' > README.txt
+	@mandoc -T ascii appscript.1 | col -b | tail +3 | sed -e '$$d' | sed -e '$$d' | sed -e 's|%%PREFIX%%|${PREFIX}|'  > README.txt
