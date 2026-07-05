@@ -211,13 +211,41 @@ main(int argc, char **argv)
         posix_spawnattr_destroy(&pattr);
         if (ret == 0) {
             child_pid = pid;
-            while (waitpid(pid, &status, 0) == -1) {
-                if (errno != EINTR) {
-                    child_pid = 0;
-                    return EX_SOFTWARE;
+            sig_t old_sigttou = signal(SIGTTOU, SIG_IGN);
+            if (isatty(STDIN_FILENO)) {
+                if (tcsetpgrp(STDIN_FILENO, pid) == -1)
+                    err(EX_SOFTWARE, "tcsetpgrp");
+            }
+            while (1) {
+                while (waitpid(pid, &status, WUNTRACED) == -1) {
+                    if (errno != EINTR) {
+                        child_pid = 0;
+                        return EX_SOFTWARE;
+                    }
+                }
+                if (WIFSTOPPED(status)) {
+                    if (isatty(STDIN_FILENO)) {
+                        if (tcsetpgrp(STDIN_FILENO, getpgrp()) == -1)
+                            err(EX_SOFTWARE, "tcsetpgrp");
+                    }
+                    signal(SIGTTOU, old_sigttou);
+                    raise(SIGTSTP);
+                    old_sigttou = signal(SIGTTOU, SIG_IGN);
+                    if (isatty(STDIN_FILENO)) {
+                        if (tcsetpgrp(STDIN_FILENO, pid) == -1)
+                            err(EX_SOFTWARE, "tcsetpgrp");
+                    }
+                    kill(pid, SIGCONT);
+                } else if (WIFEXITED(status) || WIFSIGNALED(status)) {
+                    break;
                 }
             }
             child_pid = 0;
+            if (isatty(STDIN_FILENO)) {
+                if (tcsetpgrp(STDIN_FILENO, getpgrp()) == -1)
+                    err(EX_SOFTWARE, "tcsetpgrp");
+            }
+            signal(SIGTTOU, old_sigttou);
             if (WIFEXITED(status))
                 ret = WEXITSTATUS(status);
             else
