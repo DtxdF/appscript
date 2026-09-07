@@ -28,6 +28,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/fcntl.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/param.h>
 #include <sys/sysctl.h>
@@ -54,8 +56,10 @@ extern char **environ;
 extern char _binary_payload_start[];
 extern char _binary_payload_end[];
 
+static int lockfd = -1;
 static char *extractdir = NULL;
 static char tmpdir_tmpl[PATH_MAX];
+static char lockfile[PATH_MAX];
 static int ignored_signals[] = {
     SIGALRM, SIGVTALRM, SIGPROF, SIGUSR1, SIGUSR2, 0
 };
@@ -71,15 +75,18 @@ static void on_signal(int sig);
 static void ignore_signals(void);
 static void handle_signals(void);
 static void rm_tree(char **path_argv);
+static void s_mkdir(const char *path);
 
 int
 main(int argc, char **argv)
 {
     int ret, status;
-    bool is_error = false;
+    int donefd;
+    bool head, is_error, is_done;
     pid_t pid;
     const char *tmpdir, *entry_pathname;
     char *iam;
+    char donefile[PATH_MAX] = {0};
     size_t payload_size;
     struct archive *a, *ext;
     struct archive_entry *entry;
@@ -87,6 +94,7 @@ main(int argc, char **argv)
     uid_t uid;
     gid_t gid;
 
+    head = is_error = is_done = false;
     uid = geteuid();
     gid = getegid();
     iam = whoami();
@@ -109,87 +117,151 @@ main(int argc, char **argv)
     if (!(sbuf.st_mode & (S_ISVTX | S_IRWXU | S_IRWXG | S_IRWXO)))
         err(EX_NOPERM, "Operation not permitted");
 
-    if (snprintf(tmpdir_tmpl, sizeof(tmpdir_tmpl), "%s/%s", tmpdir, "appscript_XXXXXXXXXXX") < 0)
+    /* Let's create the user directory. */
+    if (snprintf(tmpdir_tmpl, sizeof(tmpdir_tmpl), "%s/%lu/", tmpdir,
+            (unsigned long)uid) < 0) {
         err(EX_SOFTWARE, "snprintf");
+    }
+    s_mkdir(tmpdir_tmpl);
 
-    if ((extractdir = mkdtemp(tmpdir_tmpl)) == NULL)
-        err(EX_SOFTWARE, "mkdtemp");
-
-    if (chdir(extractdir) == -1)
-        err(EX_SOFTWARE, "chdir(%s)", extractdir);
-
-    if ((a = archive_read_new()) == NULL || (ext = archive_write_disk_new()) == NULL) {
-        errx(EX_SOFTWARE, "can't allocate more memory or something is wrong."
-            "Cannot continue.");
+    /* Let's create the lock before doing real stuff. */
+    if (snprintf(lockfile, sizeof(lockfile), "%s/%s.lock", tmpdir_tmpl,
+            PAYLOAD_CHECKSUM) < 0) {
+        err(EX_SOFTWARE, "snprintf");
+    }
+    if ((lockfd = open(lockfile, O_RDWR | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR)) == -1)
+        err(EX_SOFTWARE, "open(%s)", lockfile);
+    if (flock(lockfd, LOCK_EX | LOCK_NB) == 0) {
+        /* We have the power. */
+        head = true;
+    } else if (errno == EWOULDBLOCK) {
+        if (flock(lockfd, LOCK_SH) == -1)
+            err(EX_SOFTWARE, "flock");
+    } else {
+        err(EX_SOFTWARE, "flock");
     }
 
-    int flags = ARCHIVE_EXTRACT_SECURE_NOABSOLUTEPATHS |
-                ARCHIVE_EXTRACT_SECURE_NODOTDOT |
-                ARCHIVE_EXTRACT_SECURE_SYMLINKS;
-
-    if (archive_write_disk_set_options(ext, flags) != ARCHIVE_OK) {
-        errx(EX_SOFTWARE, "archive_write_set_options (%d): %s", archive_errno(ext),
-            archive_error_string(ext));
+    /* Now the working directory. */
+    if (strlcat(tmpdir_tmpl, PAYLOAD_CHECKSUM, sizeof(tmpdir_tmpl)) \
+            >= sizeof(tmpdir_tmpl)) {
+        errx(EX_SOFTWARE, "path too long: %s", tmpdir_tmpl);
     }
 
-    archive_read_support_filter_all(a);
-    archive_read_support_format_all(a);
-
-    if (archive_read_open_memory(a, &_binary_payload_start, payload_size) == ARCHIVE_FATAL) {
-        errx(EX_SOFTWARE, "archive_read_open_memory (%d): %s", archive_errno(a),
-            archive_error_string(a));
+    /* A hint to ensure we don't have to extract the payload again. */
+    if (snprintf(donefile, sizeof(donefile), "%s/.%s", tmpdir_tmpl,
+            PAYLOAD_CHECKSUM) < 0) {
+        err(EX_SOFTWARE, "snprintf");
+    }
+    errno = 0;
+    if (lstat(donefile, &sbuf) == -1 && errno != ENOENT)
+        err(EX_SOFTWARE, "lstat(%s)", donefile);
+    if (errno != ENOENT) {
+        is_done = true;
+    } else {
+        if (!head)
+            errx(EX_SOFTWARE, "incomplete extraction from leader process (try again).");
     }
 
-    while (!should_stop) {
-        ret = archive_read_next_header(a, &entry);
+    extractdir = tmpdir_tmpl;
 
-        if (ret == ARCHIVE_EOF)
-            break;
-        if (ret < ARCHIVE_OK) {
-            warnx("archive_read_next_header (%d): %s", archive_errno(a),
+    if (head && !is_done) {
+        rm_tree((char *[]){ extractdir, NULL });
+        s_mkdir(extractdir);
+
+        if (chdir(extractdir) == -1)
+            err(EX_SOFTWARE, "chdir(%s)", extractdir);
+
+        if ((a = archive_read_new()) == NULL || (ext = archive_write_disk_new()) == NULL) {
+            errx(EX_SOFTWARE, "can't allocate more memory or something is wrong."
+                "Cannot continue.");
+        }
+
+        int flags = ARCHIVE_EXTRACT_SECURE_NOABSOLUTEPATHS |
+                    ARCHIVE_EXTRACT_SECURE_NODOTDOT |
+                    ARCHIVE_EXTRACT_SECURE_SYMLINKS;
+
+        if (archive_write_disk_set_options(ext, flags) != ARCHIVE_OK) {
+            errx(EX_SOFTWARE, "archive_write_set_options (%d): %s", archive_errno(ext),
+                archive_error_string(ext));
+        }
+
+        archive_read_support_filter_all(a);
+        archive_read_support_format_all(a);
+
+        if (archive_read_open_memory(a, &_binary_payload_start, payload_size) == ARCHIVE_FATAL) {
+            errx(EX_SOFTWARE, "archive_read_open_memory (%d): %s", archive_errno(a),
                 archive_error_string(a));
         }
-        if (ret == ARCHIVE_RETRY)
-            continue;
-        if (ret == ARCHIVE_FATAL) {
-            is_error = true;
-            break;
+
+        while (!should_stop) {
+            ret = archive_read_next_header(a, &entry);
+
+            if (ret == ARCHIVE_EOF)
+                break;
+            if (ret < ARCHIVE_OK) {
+                warnx("archive_read_next_header (%d): %s", archive_errno(a),
+                    archive_error_string(a));
+            }
+            if (ret == ARCHIVE_RETRY)
+                continue;
+            if (ret == ARCHIVE_FATAL) {
+                is_error = true;
+                break;
+            }
+
+            entry_pathname = archive_entry_pathname(entry);
+            if (entry_pathname == NULL || entry_pathname[0] == '\0') {
+                warnx("Archive entry has empty or unreadable filename ... skipping.");
+                continue;
+            }
+
+            archive_entry_set_uid(entry, uid);
+            archive_entry_set_uname(entry, NULL);
+            archive_entry_set_gid(entry, gid);
+            archive_entry_set_gname(entry, NULL);
+
+            ret = archive_read_extract2(a, entry, ext);
+
+            if (ret != ARCHIVE_OK) {
+                warnx("archive_read_extract2(%s) (%d): %s", entry_pathname,
+                    archive_errno(ext), archive_error_string(ext));
+            }
+            if (ret == ARCHIVE_FATAL) {
+                is_error = true;
+                break;
+            }
         }
 
-        entry_pathname = archive_entry_pathname(entry);
-        if (entry_pathname == NULL || entry_pathname[0] == '\0') {
-            warnx("Archive entry has empty or unreadable filename ... skipping.");
-            continue;
+        if (archive_read_close(a) != ARCHIVE_OK) {
+            warnx("archive_read_close (%d): %s", archive_errno(a),
+                archive_error_string(a));
         }
+        archive_read_free(a);
 
-        archive_entry_set_uid(entry, uid);
-        archive_entry_set_uname(entry, NULL);
-        archive_entry_set_gid(entry, gid);
-        archive_entry_set_gname(entry, NULL);
-
-        ret = archive_read_extract2(a, entry, ext);
-
-        if (ret != ARCHIVE_OK) {
-            warnx("archive_read_extract2(%s) (%d): %s", entry_pathname,
-                archive_errno(ext), archive_error_string(ext));
+        if (archive_write_close(ext) != ARCHIVE_OK) {
+            warnx("archive_write_close (%d): %s", archive_errno(ext),
+                archive_error_string(ext));
         }
-        if (ret == ARCHIVE_FATAL) {
-            is_error = true;
-            break;
+        archive_write_free(ext);
+
+        if (!should_stop && !is_error) {
+            if ((donefd = open(donefile, O_RDONLY | O_CREAT, DEFFILEMODE)) == -1)
+                err(EX_CANTCREAT, "open(%s)", donefile);
+            (void)close(donefd);
         }
+    } else {
+        if (chdir(extractdir) == -1)
+            err(EX_SOFTWARE, "chdir(%s)", extractdir);
     }
 
-    if (archive_read_close(a) != ARCHIVE_OK) {
-        warnx("archive_read_close (%d): %s", archive_errno(a),
-            archive_error_string(a));
+    /* 
+     * Change to shared lock to execute the APPSCRIPT executable
+     * regardless the process.
+     */
+    if (!should_stop && !is_error) {
+        if (flock(lockfd, LOCK_SH) == -1)
+            err(EX_SOFTWARE, "flock");
     }
-    archive_read_free(a);
-
-    if (archive_write_close(ext) != ARCHIVE_OK) {
-        warnx("archive_write_close (%d): %s", archive_errno(ext),
-            archive_error_string(ext));
-    }
-    archive_write_free(ext);
 
     ret = EX_OK;
 
@@ -265,9 +337,28 @@ main(int argc, char **argv)
 static void
 cleanup(void)
 {
-    if (extractdir != NULL) {
-        rm_tree((char *[]){ extractdir, NULL });
-        extractdir = NULL;
+    bool clean = true;
+
+    errno = 0;
+    if (lockfd != -1 && flock(lockfd, LOCK_EX | LOCK_NB) == -1 && errno != EWOULDBLOCK) {
+        warn("flock");
+        /*
+         * Even if we don't remove the working directory, we can assume
+         * that this an ephemeral directory that will be removed eventually.
+         */
+        clean = false;
+    }
+    /* Avoid removing the working directory if we are not the last process. */
+    if (errno == EWOULDBLOCK)
+        clean = false;
+
+    if (clean) {
+        if (extractdir != NULL) {
+            rm_tree((char *[]){ extractdir, NULL });
+            extractdir = NULL;
+        }
+        if (unlink(lockfile) == -1)
+            warn("unlink(%s)", lockfile);
     }
 }
 
@@ -280,7 +371,8 @@ on_signal(int sig)
         kill(-child_pid, sig);
 }
 
-static void ignore_signals(void)
+static void
+ignore_signals(void)
 {
     int sig;
     int *aux = ignored_signals;
@@ -289,7 +381,8 @@ static void ignore_signals(void)
         signal(sig, SIG_IGN);
 }
 
-static void handle_signals(void)
+static void
+handle_signals(void)
 {
     int sig;
     int *aux = handled_signals;
@@ -310,10 +403,58 @@ static char *whoami(void)
     return myself;
 }
 
-/*
- * Extracted from ${SRCTREE}/bin/rm/rm.c and adapted to get the same
- * behaviour of 'rm -rf'.
+static void
+s_mkdir(const char *path)
+{
+    struct stat sbuf;
+
+    errno = 0;
+    if (lstat(path, &sbuf) == -1 && errno != ENOENT)
+        err(EX_SOFTWARE, "lstat(%s)", path);
+    if (errno != ENOENT) { /* Exists */
+        if (sbuf.st_uid != geteuid())
+            err(EX_NOPERM, "Operation not permitted");
+        if (!S_ISDIR(sbuf.st_mode))
+            err(EX_DATAERR, "%s: Not a directory", path);
+        if (chmod(path, S_IRWXU) == -1)
+            err(EX_SOFTWARE, "chmod(%s)", path);
+    } else {
+        if (mkdir(path, S_IRWXU) == -1 && errno != EEXIST)
+            err(EX_SOFTWARE, "mkdir(%s)", path);
+    }
+}
+
+/*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Copyright (c) 1990, 1993, 1994
+ *	The Regents of the University of California.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the University nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
  */
+
 static void
 rm_tree(char **path_argv)
 {

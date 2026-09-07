@@ -139,6 +139,9 @@ main()
 
     tar ${arg_dereference} -c --${compress_algo} -C "${directory}" -f "${BUILDDIR}/payload" . || exit $?
 
+    local payload_checksum
+    payload_checksum=`sha256 -q -- "${BUILDDIR}/payload"` || exit $?
+
     (
         cd -- "${BUILDDIR}" &&
             objcopy \
@@ -156,6 +159,7 @@ main()
     fi
 
     clang -O3 -s -pipe --sysroot="${sysroot}" \
+        -DPAYLOAD_CHECKSUM="\"${payload_checksum}\"" \
         -target "${machine_arch}-unknown-freebsd" "${BUILDDIR}/payload.o" \
         "${SHAREDIR}/stub.c" -o "${filename}" -larchive ${static_args} || exit $?
 

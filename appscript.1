@@ -25,7 +25,7 @@
 .\"CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 .\"OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 .\"OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-.Dd June 03, 2026
+.Dd September 07, 2026
 .Dt APPSCRIPT 1
 .Os
 .Sh NAME
@@ -115,6 +115,25 @@ runs in a new process group, and when its parent process
 receives a handled signal
 .Po such as those mentioned above Pc Ns , it forwards the signal to the entire
 .Sy APPSCRIPT Ns 's process group.
+.Pp
+Although a temporary directory is created, its structure is deterministic:
+.Sy <tempdir> Ns / Ns Sy <euid> Ns / Ns Sy <payload-checksum> Ns "."
+The reason for this is to extract the payload only once, even if multiple
+processes are created from the AppScript. To avoid races,
+.Xr flock 2
+is used to apply an exclusive lock on
+.Sy <tempdir> Ns / Ns Sy <euid> Ns / Ns Sy <payload-checksum> Ns .lock Ns "."
+Subsequent processes will be unable to acquire an exclusive lock and will
+fall back to a shared lock, so they will wait for the first process
+.Pq or the leader
+to extract the payload. Once the leader has extracted the payload, it will
+switch to a shared lock, and the other processes will continue as normal.
+The leader will create a dummy file named
+.Sy <tempdir> Ns / Sy <euid> Ns / Ns Sy <payload-checksum> Ns / Ns Sy .<payload-checksum>
+to indicate whether the extraction failed in a previous process.
+To remove the temporary directory and the lock, the process will attempt
+to acquire an exclusive lock; if successful, the temporary directory
+will be removed.
 .Pp
 The options are as follows:
 .Pp
