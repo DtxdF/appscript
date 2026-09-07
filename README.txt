@@ -50,6 +50,21 @@ DESCRIPTION
      AppScript executable) receives a handled signal (such as those mentioned
      above), it forwards the signal to the entire APPSCRIPT's process group.
 
+     Although a temporary directory is created, its structure is
+     deterministic: <tempdir>/<euid>/<payload-checksum>. The reason for this
+     is to extract the payload only once, even if multiple processes are
+     created from the AppScript. To avoid races, flock(2) is used to apply an
+     exclusive lock on <tempdir>/<euid>/<payload-checksum>.lock. Subsequent
+     processes will be unable to acquire an exclusive lock and will fall back
+     to a shared lock, so they will wait for the first process (or the leader)
+     to extract the payload. Once the leader has extracted the payload, it
+     will switch to a shared lock, and the other processes will continue as
+     normal.  The leader will create a dummy file named <tempdir>/
+     <euid>/<payload-checksum>/.<payload-checksum> to indicate whether the
+     extraction failed in a previous process.  To remove the temporary
+     directory and the lock, the process will attempt to acquire an exclusive
+     lock; if successful, the temporary directory will be removed.
+
      The options are as follows:
 
      -L   All symbolic links will be followed.
