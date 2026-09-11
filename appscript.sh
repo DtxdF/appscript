@@ -63,7 +63,11 @@ main()
                 opt_dereference=true
                 ;;
             M)
-                mcmodel="medium"
+                if [ "${mcmodel}" = "small" ]; then
+                    mcmodel="medium"
+                elif [ "${mcmodel}" = "medium" ]; then
+                    mcmodel="large"
+                fi
                 ;;
             s)
                 opt_static=true
