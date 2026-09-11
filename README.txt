@@ -72,6 +72,8 @@ DESCRIPTION
 	  target of the link will be archived instead.
 
      -M   Keeps code in the first 2 GB but allows data to exceed that limit.
+	  Use twice to tell clang(1) to make no assumptions about the
+	  addresses or sizes of code and data sections.
 	  Useful for very large AppScripts.
 
      -s   Tells the linker to create a statically linked executable.
