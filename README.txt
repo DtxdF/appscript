@@ -3,7 +3,7 @@ NAME
 
 SYNOPSIS
      appscript -v
-     appscript [-Ls] [-a arch] [-c algo] [-o filename] [-S sysroot] directory
+     appscript [-LMs] [-a arch] [-c algo] [-o filename] [-S sysroot] directory
 
 DESCRIPTION
      appscript is a very lightweight and easy-to-use tool for creating self-
@@ -70,6 +70,9 @@ DESCRIPTION
      -L   All symbolic links will be followed.
 	  Normally, symbolic links are archived as such. With this option, the
 	  target of the link will be archived instead.
+
+     -M   Keeps code in the first 2 GB but allows data to exceed that limit.
+	  Useful for very large AppScripts.
 
      -s   Tells the linker to create a statically linked executable.
 

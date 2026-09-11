@@ -25,7 +25,7 @@
 .\"CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 .\"OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 .\"OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-.Dd September 07, 2026
+.Dd September 10, 2026
 .Dt APPSCRIPT 1
 .Os
 .Sh NAME
@@ -35,7 +35,7 @@
 .Nm
 .Fl v
 .Nm
-.Op Fl Ls
+.Op Fl LMs
 .Op Fl a Ar arch
 .Op Fl c Ar algo
 .Op Fl o Ar filename
@@ -143,6 +143,8 @@ All symbolic links will be followed.
 .br
 Normally, symbolic links are archived as such. With this option, the
 target of the link will be archived instead.
+.It Fl M
+Keeps code in the first 2 GB but allows data to exceed that limit. Useful for very large AppScripts.
 .It Fl s
 Tells the linker to create a statically linked executable.
 .It Fl v

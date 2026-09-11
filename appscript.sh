@@ -49,6 +49,7 @@ main()
 {
     local _o
     local opt_dereference=false arg_dereference=
+    local mcmodel="small"
     local opt_static=false
     local machine_arch=
     local compress_algo="zstd"
@@ -56,10 +57,13 @@ main()
     local filename="a.AppScript"
     local sysroot=
 
-    while getopts ":Lsva:c:o:S:" _o; do
+    while getopts ":LMsva:c:o:S:" _o; do
         case "${_o}" in
             L)
                 opt_dereference=true
+                ;;
+            M)
+                mcmodel="medium"
                 ;;
             s)
                 opt_static=true
@@ -158,7 +162,7 @@ main()
         static_args="-static -lbz2 -lz -lprivatezstd -llzma -lmd -lcrypto -lbsdxml -lpthread"
     fi
 
-    clang -O3 -s -pipe --sysroot="${sysroot}" \
+    clang -O3 -s -pipe -mcmodel="${mcmodel}" --sysroot="${sysroot}" \
         -DPAYLOAD_CHECKSUM="\"${payload_checksum}\"" \
         -target "${machine_arch}-unknown-freebsd" "${BUILDDIR}/payload.o" \
         "${SHAREDIR}/stub.c" -o "${filename}" -larchive ${static_args} || exit $?
