@@ -197,7 +197,7 @@ usage()
 {
     cat << EOF
 usage: appscript -v
-       appscript [-Ls] [-a <arch>] [-c <algo>] [-o <filename>] [-S <sysroot>] <directory>
+       appscript [-LMs] [-a <arch>] [-c <algo>] [-o <filename>] [-S <sysroot>] <directory>
 EOF
 }
 
