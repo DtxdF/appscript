@@ -4,6 +4,7 @@ SED?=sed -i ''
 RM?=rm -f
 PREFIX?=/usr/local
 MANDIR?=${PREFIX}/share/man
+LN?=ln -f
 
 APPSCRIPT_VERSION?=1.1.0
 
@@ -16,9 +17,11 @@ install:
 	${MKDIR} -m 755 -p "${DESTDIR}${MANDIR}/man1"
 	${INSTALL} -m 444 appscript.1 "${DESTDIR}${MANDIR}/man1/appscript.1"
 	${SED} -e 's|%%PREFIX%%|${PREFIX}|' "${DESTDIR}${MANDIR}/man1/appscript.1"
+	${INSTALL} -m 444 appscript-verify.1 "${DESTDIR}${MANDIR}/man1/appscript-verify.1"
 	${MKDIR} -m 755 -p "${DESTDIR}${PREFIX}/bin"
 	${INSTALL} -m 444 stub.c "${DESTDIR}${PREFIX}/share/appscript/stub.c"
 	${INSTALL} -m 555 appscript.sh "${DESTDIR}${PREFIX}/bin/appscript"
+	${LN} "${DESTDIR}${PREFIX}/bin/appscript" "${DESTDIR}${PREFIX}/bin/appscript-verify"
 	${SED} -e 's|%%VERSION%%|${APPSCRIPT_VERSION}|' "${DESTDIR}${PREFIX}/bin/appscript"
 	${SED} -e 's|%%PREFIX%%|${PREFIX}|' "${DESTDIR}${PREFIX}/bin/appscript"
 

@@ -3,7 +3,8 @@ NAME
 
 SYNOPSIS
      appscript -v
-     appscript [-LMs] [-a arch] [-c algo] [-o filename] [-S sysroot] directory
+     appscript [-LMs] [-a arch] [-c algo] [-I vendorid] [-i sign-key]
+	       [-o filename] [-S sysroot] directory
 
 DESCRIPTION
      appscript is a very lightweight and easy-to-use tool for creating self-
@@ -28,10 +29,10 @@ DESCRIPTION
      /var/tmp/appscript directory exists and, if so, uses it to create
      temporary directories; otherwise, /tmp is used as fallback. The reason
      /var/tmp/appscript is preferred is that a system administrator can
-     configure this location to mount a tmpfs(4) filesystem to improve the
+     configure this location to mount a mdmfs(8) filesystem to improve the
      performance of very large AppScripts. This is more secure than setting
      "vfs.usermount=1" and letting the user (or, in this case, the user's
-     process) mount a tmpfs(4) filesystem. Regardless of the directory used,
+     process) mount a mdmfs(8) filesystem. Regardless of the directory used,
      it must have file mode 1777; otherwise, an EX_NOPERM error will be
      returned. After initial checks, the tarball is extracted to a temporary
      location determined by the directories mentioned above.  The AppScript
@@ -89,6 +90,15 @@ DESCRIPTION
 	  Compression algorithm to be used to compress the directory. Valid
 	  arguments: gzip, xz, and zstd. The default is zstd.
 
+     -I vendorid
+	  Adds a string to a new ELF section named .vendorid to identify the
+	  author of the resulting executable.
+
+     -i sign-key
+	  Signs the resulting executable and adds the signature to the
+	  executable itself.
+	  The executable can be verified using appscript-verify(1).
+
      -o filename
 	  Name of the resulting executable. By default, a.AppScript.
 
@@ -121,10 +131,10 @@ ENVIRONMENT
 EXAMPLES
    Improving performance
      If you are the sovereign of your system, users will appreciate you if you
-     enable tmpfs(4) at /var/tmp/appscript for very large AppScripts:
+     enable mdmfs(8) at /var/tmp/appscript for very large AppScripts:
 
 	   # /etc/fstab
-	   tmpfs   /var/tmp/appscript  tmpfs   rw,size=1G,mode=1777,late  0   0
+	   md	/var/tmp/appscript  mfs   rw,-SMnt,-p1777,-s1g,late  0	 0
 
      Then:
 
@@ -158,7 +168,7 @@ EXAMPLES
 	   Hello, world!
 
 SEE ALSO
-     tar(1) libarchive(3) signal(3) sysexits(3)
+     appscript-verify(1) tar(1) libarchive(3) signal(3) sysexits(3) mdmfs(8)
 
 AUTHORS
      Jesus Daniel Colmenares Oviedo <DtxdF@disroot.org>

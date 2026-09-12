@@ -106,7 +106,7 @@ main(int argc, char **argv)
     if (atexit(cleanup) != 0)
         err(EX_SOFTWARE, "atexit");
 
-    /* This should be a mounted tmpfs(4) fs. */
+    /* This could be an in-memory file system. */
     tmpdir = _APPSCRIPT_DEFAULT_TMPDIR;
     if ((ret = lstat(tmpdir, &sbuf)) == -1)
         tmpdir = "/tmp";

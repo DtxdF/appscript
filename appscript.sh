@@ -28,6 +28,8 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+set -o pipefail
+
 # AppScript version.
 VERSION="%%VERSION%%"
 
@@ -53,11 +55,13 @@ main()
     local opt_static=false
     local machine_arch=
     local compress_algo="zstd"
+    local vendorid=
+    local sign_key=
     local target=
     local filename="a.AppScript"
     local sysroot=
 
-    while getopts ":LMsva:c:o:S:" _o; do
+    while getopts ":LMsva:c:I:i:o:S:" _o; do
         case "${_o}" in
             L)
                 opt_dereference=true
@@ -81,6 +85,12 @@ main()
                 ;;
             c)
                 compress_algo="${OPTARG}"
+                ;;
+            I)
+                vendorid="${OPTARG}"
+                ;;
+            i)
+                sign_key="${OPTARG}"
                 ;;
             o)
                 filename="${OPTARG}"
@@ -135,9 +145,7 @@ main()
         fi
     fi
 
-    trap '' ${IGNORED_SIGNALS}
-    trap "ERRLEVEL=\$?; cleanup; exit \${ERRLEVEL}" EXIT
-    trap "cleanup; exit 70" ${HANDLER_SIGNALS}
+    atexit_init
 
     BUILDDIR=`mktemp -d -t appscript` || exit $?
 
@@ -166,12 +174,48 @@ main()
         static_args="-static -lbz2 -lz -lprivatezstd -llzma -lmd -lcrypto -lbsdxml -lpthread"
     fi
 
+    local out="${filename}"
+
+    if [ -n "${sign_key}" ] || [ -n "${vendorid}" ]; then
+        out="${BUILDDIR}/appscript"
+    fi
+
     clang -O3 -s -pipe -mcmodel="${mcmodel}" --sysroot="${sysroot}" \
         -DPAYLOAD_CHECKSUM="\"${payload_checksum}\"" \
         -target "${machine_arch}-unknown-freebsd" "${BUILDDIR}/payload.o" \
-        "${SHAREDIR}/stub.c" -o "${filename}" -larchive ${static_args} || exit $?
+        "${SHAREDIR}/stub.c" -o "${out}" -larchive ${static_args} || exit $?
+
+    if [ -n "${vendorid}" ]; then
+        local vendorid_hash
+        vendorid_hash=`printf "%s" "${vendorid}"` || exit $?
+
+        printf "%s" "${vendorid_hash}" > "${BUILDDIR}/vendorid" || exit $?
+
+        objcopy --add-section .vendorid="${BUILDDIR}/vendorid" \
+            --set-section-flags .vendorid=noload,readonly \
+            "${out}" "${BUILDDIR}/appscript.vendor" || exit $?
+
+        mv -- "${BUILDDIR}/appscript.vendor" "${out}" || exit $?
+    fi
+
+    if [ -n "${sign_key}" ]; then
+        signify -S -c "verify with appscript-verify" -s "${sign_key}" -m "${out}" \
+            -x "${BUILDDIR}/appscript.sig" || exit $?
+
+        echo >> "${out}" || exit $?
+        cat -- "${BUILDDIR}/appscript.sig" >> "${out}" || exit $?
+
+        mv -- "${out}" "${filename}" || exit $?
+    fi
 
     exit ${EX_OK}
+}
+
+atexit_init()
+{
+    trap '' ${IGNORED_SIGNALS}
+    trap "ERRLEVEL=\$?; cleanup; exit \${ERRLEVEL}" EXIT
+    trap "cleanup; exit 70" ${HANDLER_SIGNALS}
 }
 
 log_err()
@@ -197,8 +241,106 @@ usage()
 {
     cat << EOF
 usage: appscript -v
-       appscript [-LMs] [-a <arch>] [-c <algo>] [-o <filename>] [-S <sysroot>] <directory>
+       appscript [-LMs] [-a <arch>] [-c <algo>] [-I <vendorid>] [-i <sign-key>]
+               [-o <filename>] [-S <sysroot>] <directory>
 EOF
 }
 
-main "$@"
+main_verify()
+{
+    local _o
+    local opt_print_vendorid=false
+    local public_key=
+
+    while getopts ":Pp:" _o; do
+        case "${_o}" in
+            P)
+                opt_print_vendorid=true
+                ;;
+            p)
+                public_key="${OPTARG}"
+                ;;
+            *)
+                usage_verify
+                exit ${EX_USAGE}
+                ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    if [ -n "${public_key}" ] && ${opt_print_vendorid}; then
+        usage_verify
+        exit ${EX_USAGE}
+    fi
+
+    local filename="$1"
+    
+    if [ -z "${filename}" ]; then
+        usage_verify
+        exit ${EX_USAGE}
+    fi
+
+    if ${opt_print_vendorid}; then
+        atexit_init
+
+        BUILDDIR=`mktemp -d -t appscript` || exit $?
+
+        if ! objcopy --dump-section .vendorid="${BUILDDIR}/vendorid" "${filename}" - > /dev/null 2>&1; then
+            echo "No vendor ID section found." >&2
+            exit 1
+        fi
+
+        local vendorid
+        vendorid=`head -1 -- "${BUILDDIR}/vendorid"` || exit $?
+
+        printf "%s\n" "${vendorid}"
+    else
+        if [ -z "${public_key}" ]; then
+            usage_verify
+            exit ${EX_USAGE}
+        fi
+
+        atexit_init
+
+        BUILDDIR=`mktemp -d -t appscript` || exit $?
+
+        tail -c 256 -- "${filename}" |\
+            grep -a -A1 -Ee '^untrusted comment:' > "${BUILDDIR}/appscript.sig"
+
+        if [ $? -ne 0 ]; then
+            echo "No signature was found." >&2
+            exit 1
+        fi
+
+        local sig_size
+        sig_size=`stat -f %z -- "${BUILDDIR}/appscript.sig"` || exit $?
+
+        local total_size
+        total_size=`stat -f %z -- "${filename}"` || exit $?
+
+        local orig_size
+        orig_size=$(( total_size - sig_size - 1 ))
+
+        head -c "${orig_size}" "${filename}" > "${BUILDDIR}/appscript" || exit $?
+
+        signify -V -p "${public_key}" -m "${BUILDDIR}/appscript" \
+            -x "${BUILDDIR}/appscript.sig" || exit $?
+    fi
+
+    exit ${EX_OK}
+}
+
+usage_verify()
+{
+    cat << EOF
+usage: appscript-verify -P <filename>
+       appscript-verify -p <public-key> <filename>
+EOF
+}
+
+self=`basename -- "$0"` || exit $?
+
+case "${self}" in
+    appscript-verify) main_verify "$@" ;;
+    *) main "$@" ;;
+esac

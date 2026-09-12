@@ -25,7 +25,7 @@
 .\"CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 .\"OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 .\"OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-.Dd September 11, 2026
+.Dd September 12, 2026
 .Dt APPSCRIPT 1
 .Os
 .Sh NAME
@@ -38,6 +38,8 @@
 .Op Fl LMs
 .Op Fl a Ar arch
 .Op Fl c Ar algo
+.Op Fl I Ar vendorid
+.Op Fl i Ar sign-key
 .Op Fl o Ar filename
 .Op Fl S Ar sysroot
 .Ar directory
@@ -79,14 +81,14 @@ is used as fallback. The reason
 .Pa /var/tmp/appscript
 is preferred is that a system administrator can configure this location
 to mount a
-.Xr tmpfs 4
+.Xr mdmfs 8
 filesystem to improve the performance of very large AppScripts. This is
 more secure than setting
 .Dq vfs.usermount=1
 and letting the user
 .Pq or, in this case, the user's process
 mount a
-.Xr tmpfs 4
+.Xr mdmfs 8
 filesystem. Regardless of the directory used, it must have file mode 1777; otherwise, an
 .Sy EX_NOPERM
 error will be returned. After initial checks, the tarball is extracted
@@ -167,6 +169,15 @@ arguments:
 .Sy gzip Ns , Sy xz Ns , and Sy zstd Ns "."
 The default is
 .Sy zstd Ns "."
+.It Fl I Ar vendorid
+Adds a string to a new ELF section named
+.Sy ".vendorid"
+to identify the author of the resulting executable.
+.It Fl i Ar sign-key
+Signs the resulting executable and adds the signature to the executable itself.
+.br
+The executable can be verified using
+.Xr appscript-verify 1 "."
 .It Fl o Ar filename
 Name of the resulting executable. By default,
 .Sy a.AppScript Ns "."
@@ -208,13 +219,13 @@ Absolute path to the AppScript that is currently running.
 .Sh EXAMPLES
 .Ss Improving performance
 If you are the sovereign of your system, users will appreciate you if you enable
-.Xr tmpfs 4
+.Xr mdmfs 8
 at
 .Pa /var/tmp/appscript
 for very large AppScripts:
 .Bd -literal -offset indent
 # /etc/fstab
-tmpfs   /var/tmp/appscript  tmpfs   rw,size=1G,mode=1777,late  0   0
+md   /var/tmp/appscript  mfs   rw,-SMnt,-p1777,-s1g,late  0   0
 .Ed
 .Pp
 Then:
@@ -253,9 +264,11 @@ $ \&./a.AppScript
 Hello, world!
 .Ed
 .Sh SEE ALSO
+.Xr appscript-verify 1
 .Xr tar 1
 .Xr libarchive 3
 .Xr signal 3
 .Xr sysexits 3
+.Xr mdmfs 8
 .Sh AUTHORS
 .An Jesús Daniel Colmenares Oviedo Aq Mt DtxdF@disroot.org
