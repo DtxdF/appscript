@@ -196,7 +196,12 @@ main()
     fi
 
     if [ -n "${sign_key}" ]; then
-        signify -S -c "verify with appscript-verify" -s "${sign_key}" -m "${out}" \
+        local checksum
+        checksum=`sha256 -q -- "${out}"` || exit $?
+
+        printf "%s" "${checksum}" > "${BUILDDIR}/checksum" || exit $?
+
+        signify -S -c "verify with appscript-verify" -s "${sign_key}" -m "${BUILDDIR}/checksum" \
             -x "${BUILDDIR}/appscript.sig" || exit $?
 
         echo >> "${out}" || exit $?
@@ -320,7 +325,12 @@ main_verify()
 
         head -c "${orig_size}" "${filename}" > "${BUILDDIR}/appscript" || exit $?
 
-        signify -V -p "${public_key}" -m "${BUILDDIR}/appscript" \
+        local checksum
+        checksum=`sha256 -q -- "${BUILDDIR}/appscript"` || exit $?
+
+        printf "%s" "${checksum}" > "${BUILDDIR}/checksum" || exit $?
+
+        signify -V -p "${public_key}" -m "${BUILDDIR}/checksum" \
             -x "${BUILDDIR}/appscript.sig" || exit $?
     fi
 
