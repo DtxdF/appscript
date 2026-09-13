@@ -285,7 +285,7 @@ main_verify()
 
         BUILDDIR=`mktemp -d -t appscript` || exit $?
 
-        if ! objcopy --dump-section .vendorid="${BUILDDIR}/vendorid" "${filename}" - > /dev/null 2>&1; then
+        if ! objcopy --dump-section .vendorid="${BUILDDIR}/vendorid" "${filename}" /dev/null > /dev/null 2>&1; then
             echo "No vendor ID section found." >&2
             exit 1
         fi
