@@ -186,10 +186,7 @@ main()
         "${SHAREDIR}/stub.c" -o "${out}" -larchive ${static_args} || exit $?
 
     if [ -n "${vendorid}" ]; then
-        local vendorid_hash
-        vendorid_hash=`printf "%s" "${vendorid}"` || exit $?
-
-        printf "%s" "${vendorid_hash}" > "${BUILDDIR}/vendorid" || exit $?
+        printf "%s" "${vendorid}" > "${BUILDDIR}/vendorid" || exit $?
 
         objcopy --add-section .vendorid="${BUILDDIR}/vendorid" \
             --set-section-flags .vendorid=noload,readonly \
