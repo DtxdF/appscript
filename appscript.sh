@@ -50,6 +50,7 @@ set -o pipefail
 main()
 {
     local _o
+    local opt_display_checksum=false
     local opt_dereference=false arg_dereference=
     local mcmodel="small"
     local opt_static=false
@@ -61,8 +62,11 @@ main()
     local filename="a.AppScript"
     local sysroot=
 
-    while getopts ":LMsva:c:I:i:o:S:" _o; do
+    while getopts ":CLMsva:c:I:i:o:S:" _o; do
         case "${_o}" in
+            C)
+                opt_display_checksum=true
+                ;;
             L)
                 opt_dereference=true
                 ;;
@@ -200,6 +204,10 @@ main()
         local checksum
         checksum=`sha256 -q -- "${out}"` || exit $?
 
+        if ${opt_display_checksum}; then
+            printf "%s\n" "${checksum}"
+        fi
+
         printf "%s" "${checksum}" > "${BUILDDIR}/checksum" || exit $?
 
         signify -S -c "verify with appscript-verify" -s "${sign_key}" -m "${BUILDDIR}/checksum" \
@@ -244,7 +252,7 @@ usage()
 {
     cat << EOF
 usage: appscript -v
-       appscript [-LMs] [-a <arch>] [-c <algo>] [-I <vendorid>] [-i <sign-key>]
+       appscript [-CLMs] [-a <arch>] [-c <algo>] [-I <vendorid>] [-i <sign-key>]
                [-o <filename>] [-S <sysroot>] <directory>
 EOF
 }
@@ -253,12 +261,16 @@ main_verify()
 {
     local _o
     local opt_print_vendorid=false
+    local checksum=
     local public_key=
 
-    while getopts ":Pp:" _o; do
+    while getopts ":PC:p:" _o; do
         case "${_o}" in
             P)
                 opt_print_vendorid=true
+                ;;
+            C)
+                checksum="${OPTARG}"
                 ;;
             p)
                 public_key="${OPTARG}"
@@ -326,8 +338,9 @@ main_verify()
 
         head -c "${orig_size}" "${filename}" > "${BUILDDIR}/appscript" || exit $?
 
-        local checksum
-        checksum=`sha256 -q -- "${BUILDDIR}/appscript"` || exit $?
+        if [ -z "${checksum}" ]; then
+            checksum=`sha256 -q -- "${BUILDDIR}/appscript"` || exit $?
+        fi
 
         printf "%s" "${checksum}" > "${BUILDDIR}/checksum" || exit $?
 
@@ -342,7 +355,7 @@ usage_verify()
 {
     cat << EOF
 usage: appscript-verify -P <filename>
-       appscript-verify -p <public-key> <filename>
+       appscript-verify [-c <checksum>] -p <public-key> <filename>
 EOF
 }
 
