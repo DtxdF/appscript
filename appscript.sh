@@ -181,6 +181,7 @@ main()
     fi
 
     clang -O3 -s -pipe -mcmodel="${mcmodel}" --sysroot="${sysroot}" \
+        -fno-asynchronous-unwind-tables \
         -DPAYLOAD_CHECKSUM="\"${payload_checksum}\"" \
         -target "${machine_arch}-unknown-freebsd" "${BUILDDIR}/payload.o" \
         "${SHAREDIR}/stub.c" -o "${out}" -larchive ${static_args} || exit $?
