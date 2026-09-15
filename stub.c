@@ -31,6 +31,7 @@
 #include <sys/fcntl.h>
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <sys/param.h>
 #include <sys/sysctl.h>
 #include <sys/wait.h>
@@ -243,6 +244,9 @@ main(int argc, char **argv)
                 archive_error_string(ext));
         }
         archive_write_free(ext);
+
+        if (madvise(_binary_payload_start, payload_size, MADV_DONTNEED) == -1)
+            warn("madvise()");
 
         if (!should_stop && !is_error) {
             if ((donefd = open(donefile, O_RDONLY | O_CREAT, DEFFILEMODE)) == -1)
