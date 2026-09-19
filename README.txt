@@ -3,7 +3,7 @@ NAME
 
 SYNOPSIS
      appscript -v
-     appscript [-LMs] [-a arch] [-c algo] [-I vendorid] [-i sign-key]
+     appscript [-CLMs] [-a arch] [-c algo] [-I vendorid] [-i sign-key]
 	       [-o filename] [-S sysroot] directory
 
 DESCRIPTION
@@ -67,6 +67,8 @@ DESCRIPTION
      lock; if successful, the temporary directory will be removed.
 
      The options are as follows:
+
+     -C   Display the checksum after calculating it during signing.
 
      -L   All symbolic links will be followed.
 	  Normally, symbolic links are archived as such. With this option, the
