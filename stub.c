@@ -119,7 +119,7 @@ main(int argc, char **argv)
         err(EX_NOPERM, "Operation not permitted");
 
     /* Let's create the user directory. */
-    if (snprintf(tmpdir_tmpl, sizeof(tmpdir_tmpl), "%s/%lu/", tmpdir,
+    if (snprintf(tmpdir_tmpl, sizeof(tmpdir_tmpl), "%s/appscript-%lu/", tmpdir,
             (unsigned long)uid) < 0) {
         err(EX_SOFTWARE, "snprintf");
     }
