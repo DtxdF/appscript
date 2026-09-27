@@ -168,7 +168,16 @@ main()
         arg_dereference="-L"
     fi
 
-    tar ${arg_dereference} -c --${compress_algo} -C "${directory}" -f "${BUILDDIR}/payload" . || exit $?
+    local tar_options=
+
+    if [ "${compress_algo}" = "zstd" ]; then
+        tar_options="--options zstd:threads=0"
+    elif [ "${compress_algo}" = "xz" ]; then
+        tar_options="--options xz:threads=0"
+    fi
+
+    tar ${arg_dereference} -c ${tar_options} --${compress_algo} \
+        -C "${directory}" -f "${BUILDDIR}/payload" . || exit $?
 
     local payload_checksum
     if [ "${checksum_algo}" = "sha256" ]; then
