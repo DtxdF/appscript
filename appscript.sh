@@ -36,6 +36,7 @@ VERSION="%%VERSION%%"
 # see sysexits(3)
 EX_OK=0
 EX_USAGE=64
+EX_DATAERR=65
 
 # Signals
 IGNORED_SIGNALS="SIGALRM SIGVTALRM SIGPROF SIGUSR1 SIGUSR2"
@@ -123,12 +124,12 @@ main()
 
     case "${compress_algo}" in
         gzip|xz|zstd) ;;
-        *) usage; exit ${EX_USAGE} ;;
+        *) log_err "Unsupported compression algorithm: ${compress_algo}"; exit ${EX_DATAERR} ;;
     esac
 
     case "${checksum_algo}" in
         sha256|blake3) ;;
-        *) usage; exit ${EX_USAGE}
+        *) log_err "Unsupported checksum algorithm: ${checksum_algo}"; exit ${EX_DATAERR} ;;
     esac
 
     local format=
