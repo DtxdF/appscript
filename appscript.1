@@ -25,7 +25,7 @@
 .\"CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 .\"OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 .\"OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-.Dd September 14, 2026
+.Dd September 27, 2026
 .Dt APPSCRIPT 1
 .Os
 .Sh NAME
@@ -36,6 +36,7 @@
 .Fl v
 .Nm
 .Op Fl CLMs
+.Op Fl A Ar algo
 .Op Fl a Ar arch
 .Op Fl c Ar algo
 .Op Fl I Ar vendorid
@@ -160,6 +161,15 @@ Tells the linker to create a statically linked executable.
 .It Fl v
 Display version information about
 .Nm Ns .
+.It Fl A Ar algo
+Checksum algorithm to be used when signing the binary. Valid arguments:
+.Sy sha256 Po default Pc No and No Sy blake3 Ns "."
+.Pp
+When using
+.Sy blake3 Ns , it is assumed that
+.Em sysutils/b3sum
+is installed on your system. Likewise, the target system must have this
+port installed; otherwise, verification will fail.
 .It Fl a Ar arch
 Specifies an architecture for the binary other than the default, which
 is the same as the host. Valid arguments are:

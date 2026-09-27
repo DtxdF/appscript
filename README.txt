@@ -3,8 +3,8 @@ NAME
 
 SYNOPSIS
      appscript -v
-     appscript [-CLMs] [-a arch] [-c algo] [-I vendorid] [-i sign-key]
-	       [-o filename] [-S sysroot] directory
+     appscript [-CLMs] [-A algo] [-a arch] [-c algo] [-I vendorid]
+	       [-i sign-key] [-o filename] [-S sysroot] directory
 
 DESCRIPTION
      appscript is a very lightweight and easy-to-use tool for creating self-
@@ -83,6 +83,14 @@ DESCRIPTION
      -s   Tells the linker to create a statically linked executable.
 
      -v   Display version information about appscript.
+
+     -A algo
+	  Checksum algorithm to be used when signing the binary. Valid
+	  arguments: sha256 (default) and blake3.
+
+	  When using blake3, it is assumed that sysutils/b3sum is installed on
+	  your system. Likewise, the target system must have this port
+	  installed; otherwise, verification will fail.
 
      -a arch
 	  Specifies an architecture for the binary other than the default,

@@ -54,6 +54,7 @@ main()
     local opt_dereference=false arg_dereference=
     local mcmodel="small"
     local opt_static=false
+    local checksum_algo="sha256"
     local machine_arch=
     local compress_algo="zstd"
     local vendorid=
@@ -62,7 +63,7 @@ main()
     local filename="a.AppScript"
     local sysroot=
 
-    while getopts ":CLMsva:c:I:i:o:S:" _o; do
+    while getopts ":CLMsvA:a:c:I:i:o:S:" _o; do
         case "${_o}" in
             C)
                 opt_display_checksum=true
@@ -83,6 +84,9 @@ main()
             v)
                 version
                 exit ${EX_OK}
+                ;;
+            A)
+                checksum_algo="${OPTARG}"
                 ;;
             a)
                 machine_arch="${OPTARG}"
@@ -120,6 +124,11 @@ main()
     case "${compress_algo}" in
         gzip|xz|zstd) ;;
         *) usage; exit ${EX_USAGE} ;;
+    esac
+
+    case "${checksum_algo}" in
+        sha256|blake3) ;;
+        *) usage; exit ${EX_USAGE}
     esac
 
     local format=
@@ -160,7 +169,11 @@ main()
     tar ${arg_dereference} -c --${compress_algo} -C "${directory}" -f "${BUILDDIR}/payload" . || exit $?
 
     local payload_checksum
-    payload_checksum=`sha256 -q -- "${BUILDDIR}/payload"` || exit $?
+    if [ "${checksum_algo}" = "sha256" ]; then
+        payload_checksum=`sha256 -q -- "${BUILDDIR}/payload"` || exit $?
+    elif [ "${checksum_algo}" = "blake3" ]; then
+        payload_checksum=`b3sum --no-names -- "${BUILDDIR}/payload"` || exit $?
+    fi
 
     (
         cd -- "${BUILDDIR}" &&
@@ -202,7 +215,11 @@ main()
 
     if [ -n "${sign_key}" ]; then
         local checksum
-        checksum=`sha256 -q -- "${out}"` || exit $?
+        if [ "${checksum_algo}" = "sha256" ]; then
+            checksum=`sha256 -q -- "${out}"` || exit $?
+        elif [ "${checksum_algo}" = "blake3" ]; then
+            checksum=`b3sum --no-names -- "${out}"` || exit $?
+        fi
 
         if ${opt_display_checksum}; then
             printf "%s\n" "${checksum}"
@@ -214,6 +231,7 @@ main()
             -x "${BUILDDIR}/appscript.sig" || exit $?
 
         echo >> "${out}" || exit $?
+        echo -n "${checksum_algo}|" >> "${out}" || exit $?
         cat -- "${BUILDDIR}/appscript.sig" >> "${out}" || exit $?
 
         mv -- "${out}" "${filename}" || exit $?
@@ -252,8 +270,8 @@ usage()
 {
     cat << EOF
 usage: appscript -v
-       appscript [-CLMs] [-a <arch>] [-c <algo>] [-I <vendorid>] [-i <sign-key>]
-               [-o <filename>] [-S <sysroot>] <directory>
+       appscript [-CLMs] [-A <algo>] [-a <arch>] [-c <algo>] [-I <vendorid>]
+               [-i <sign-key>] [-o <filename>] [-S <sysroot>] <directory>
 EOF
 }
 
@@ -301,7 +319,7 @@ main_verify()
         BUILDDIR=`mktemp -d -t appscript` || exit $?
 
         if ! objcopy --dump-section .vendorid="${BUILDDIR}/vendorid" "${filename}" /dev/null > /dev/null 2>&1; then
-            echo "No vendor ID section found." >&2
+            log_err "No vendor ID section found."
             exit 1
         fi
 
@@ -319,16 +337,43 @@ main_verify()
 
         BUILDDIR=`mktemp -d -t appscript` || exit $?
 
+        local checksum_algo
+
         tail -c 256 -- "${filename}" |\
-            grep -a -A1 -Ee '^untrusted comment:' > "${BUILDDIR}/appscript.sig"
+            grep -a -A1 -Ee '^(sha256|blake3)|untrusted comment:' > "${BUILDDIR}/appscript.tail"
 
         if [ $? -ne 0 ]; then
-            echo "No signature was found." >&2
+            tail -c 256 -- "${filename}" |\
+                grep -a -A1 -Ee '^untrusted comment:' > "${BUILDDIR}/appscript.tail"
+
+            if [ $? -ne 0 ]; then
+                log_err "No signature was found."
+                exit 1
+            fi
+
+            cp -- "${BUILDDIR}/appscript.tail" "${BUILDDIR}/appscript.sig" || exit $?
+
+            # Backward compatibility.
+            checksum_algo="sha256"
+        else
+            cut -s -d"|" -f1 -- "${BUILDDIR}/appscript.tail" > "${BUILDDIR}/appscript.checksum_algo" || exit $?
+            sed -Ee 's/^(sha256|blake3)\|//' -- "${BUILDDIR}/appscript.tail" > "${BUILDDIR}/appscript.sig" || exit $?
+
+            checksum_algo=`head -1 -- "${BUILDDIR}/appscript.checksum_algo"` || exit $?
+        fi
+
+        case "${checksum_algo}" in
+            sha256|blake3) ;;
+            *) checksum_algo="sha256" ;;
+        esac
+
+        if [ "${checksum_algo}" = "blake3" ] && ! which -s b3sum; then
+            log_err "sysutils/b3sum is required to be installed to verify this AppScript."
             exit 1
         fi
 
         local sig_size
-        sig_size=`stat -f %z -- "${BUILDDIR}/appscript.sig"` || exit $?
+        sig_size=`stat -f %z -- "${BUILDDIR}/appscript.tail"` || exit $?
 
         local total_size
         total_size=`stat -f %z -- "${filename}"` || exit $?
@@ -339,7 +384,11 @@ main_verify()
         head -c "${orig_size}" "${filename}" > "${BUILDDIR}/appscript" || exit $?
 
         if [ -z "${checksum}" ]; then
-            checksum=`sha256 -q -- "${BUILDDIR}/appscript"` || exit $?
+            if [ "${checksum_algo}" = "sha256" ]; then
+                checksum=`sha256 -q -- "${BUILDDIR}/appscript"` || exit $?
+            elif [ "${checksum_algo}" = "blake3" ]; then
+                checksum=`b3sum --no-names -- "${BUILDDIR}/appscript"` || exit $?
+            fi
         fi
 
         printf "%s" "${checksum}" > "${BUILDDIR}/checksum" || exit $?
