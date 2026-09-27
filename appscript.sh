@@ -37,6 +37,7 @@ VERSION="%%VERSION%%"
 EX_OK=0
 EX_USAGE=64
 EX_DATAERR=65
+EX_NOINPUT=66
 
 # Signals
 IGNORED_SIGNALS="SIGALRM SIGVTALRM SIGPROF SIGUSR1 SIGUSR2"
@@ -314,13 +315,34 @@ main_verify()
         exit ${EX_USAGE}
     fi
 
+    if [ ! -f "${filename}" ]; then
+        log_err "${filename}: file not found or no read permission."
+        exit ${EX_NOINPUT}
+    fi
+
     if ${opt_print_vendorid}; then
         atexit_init
 
+        local section_info
+        section_info=`readelf -W -S "${filename}" 2>/dev/null | awk '$2 == ".vendorid" {print toupper($5), toupper($6)}'`
+
+        if [ -z "${section_info}" ]; then
+            log_err "No vendor ID section found."
+            exit 1
+        fi
+
+        local hex_offset hex_size
+        hex_offset=`echo "${section_info}" | awk '{print $1}'`
+        hex_size=`echo "${section_info}" | awk '{print $2}'`
+
+        local offset size
+        offset=`echo "ibase=16; ${hex_offset}" | bc`
+        size=`echo "ibase=16; ${hex_size}" | bc`
+
         BUILDDIR=`mktemp -d -t appscript` || exit $?
 
-        if ! objcopy --dump-section .vendorid="${BUILDDIR}/vendorid" "${filename}" /dev/null > /dev/null 2>&1; then
-            log_err "No vendor ID section found."
+        if ! dd if="${filename}" bs=1 skip="${offset}" count="${size}" 2>/dev/null > "${BUILDDIR}/vendorid"; then
+            log_err "Failed to extract vendor ID section."
             exit 1
         fi
 
