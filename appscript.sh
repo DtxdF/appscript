@@ -373,22 +373,20 @@ main_verify()
             exit 1
         fi
 
-        local sig_size
-        sig_size=`stat -f %z -- "${BUILDDIR}/appscript.tail"` || exit $?
-
-        local total_size
-        total_size=`stat -f %z -- "${filename}"` || exit $?
-
-        local orig_size
-        orig_size=$(( total_size - sig_size - 1 ))
-
-        head -c "${orig_size}" "${filename}" > "${BUILDDIR}/appscript" || exit $?
-
         if [ -z "${checksum}" ]; then
+            local sig_size
+            sig_size=`stat -f %z -- "${BUILDDIR}/appscript.tail"` || exit $?
+
+            local total_size
+            total_size=`stat -f %z -- "${filename}"` || exit $?
+
+            local orig_size
+            orig_size=$(( total_size - sig_size - 1 ))
+
             if [ "${checksum_algo}" = "sha256" ]; then
-                checksum=`sha256 -q -- "${BUILDDIR}/appscript"` || exit $?
+                checksum=`head -c "${orig_size}" "${filename}" | sha256 -q` || exit $?
             elif [ "${checksum_algo}" = "blake3" ]; then
-                checksum=`b3sum --no-names -- "${BUILDDIR}/appscript"` || exit $?
+                checksum=`head -c "${orig_size}" "${filename}" | b3sum --no-names` || exit $?
             fi
         fi
 
