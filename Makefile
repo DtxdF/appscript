@@ -6,7 +6,7 @@ PREFIX?=/usr/local
 MANDIR?=${PREFIX}/share/man
 LN?=ln -f
 
-APPSCRIPT_VERSION?=1.3.1
+APPSCRIPT_VERSION?=1.4.0
 
 all: install
 
