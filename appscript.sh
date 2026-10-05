@@ -245,7 +245,7 @@ main()
         echo -n "${checksum_algo}|" >> "${out}" || exit $?
         cat -- "${BUILDDIR}/appscript.sig" >> "${out}" || exit $?
 
-        mv -- "${out}" "${filename}" || exit $?
+        mv -f -- "${out}" "${filename}" || exit $?
     fi
 
     exit ${EX_OK}
