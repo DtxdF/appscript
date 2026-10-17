@@ -83,11 +83,13 @@ main(int argc, char **argv)
 {
     int ret, status;
     int donefd;
+    int wrkfd;
     bool head, is_error, is_done;
     pid_t pid;
     const char *tmpdir, *entry_pathname;
     char *iam;
     char donefile[PATH_MAX] = {0};
+    char appscript[PATH_MAX] = {0};
     size_t payload_size;
     struct archive *a, *ext;
     struct archive_entry *entry;
@@ -106,6 +108,9 @@ main(int argc, char **argv)
 
     if (atexit(cleanup) != 0)
         err(EX_SOFTWARE, "atexit");
+
+    if ((wrkfd = open(".", O_DIRECTORY)) == -1)
+        err(EX_SOFTWARE, "open(.)");
 
     /* This could be an in-memory file system. */
     tmpdir = _APPSCRIPT_DEFAULT_TMPDIR;
@@ -146,6 +151,15 @@ main(int argc, char **argv)
     if (strlcat(tmpdir_tmpl, PAYLOAD_CHECKSUM, sizeof(tmpdir_tmpl)) \
             >= sizeof(tmpdir_tmpl)) {
         errx(EX_SOFTWARE, "path too long: %s", tmpdir_tmpl);
+    }
+
+    /*
+     * Since we are running the executable from the current working
+     * directory, we must run APPSCRIPT using its absolute path.
+     */
+    if (snprintf(appscript, sizeof(appscript), "%s/%s", tmpdir_tmpl,
+            "APPSCRIPT") < 0) {
+        err(EX_SOFTWARE, "snprintf");
     }
 
     /* A hint to ensure we don't have to extract the payload again. */
@@ -253,10 +267,11 @@ main(int argc, char **argv)
                 err(EX_CANTCREAT, "open(%s)", donefile);
             (void)close(donefd);
         }
-    } else {
-        if (chdir(extractdir) == -1)
-            err(EX_SOFTWARE, "chdir(%s)", extractdir);
     }
+
+    if (fchdir(wrkfd) == -1)
+        err(EX_SOFTWARE, "fchdir(%d)", wrkfd);
+    (void)close(wrkfd);
 
     /* 
      * Change to shared lock to execute the APPSCRIPT executable
@@ -270,8 +285,8 @@ main(int argc, char **argv)
     ret = EX_OK;
 
     if (!should_stop && !is_error) {
-        if (lstat("APPSCRIPT", &sbuf) == -1)
-            err(EX_NOINPUT, "lstat(APPSCRIPT)");
+        if (lstat(appscript, &sbuf) == -1)
+            err(EX_NOINPUT, "lstat(%s)", appscript);
         if (sbuf.st_uid != uid || !(sbuf.st_mode & S_IXUSR))
             errx(EX_NOPERM, "Operation not permitted");
         if (setenv("APPSCRIPT_PWD", extractdir, 1) == -1)
@@ -283,7 +298,7 @@ main(int argc, char **argv)
             err(EX_SOFTWARE, "posix_spawnattr_init");
         posix_spawnattr_setflags(&pattr, POSIX_SPAWN_SETPGROUP);
         posix_spawnattr_setpgroup(&pattr, 0);
-        ret = posix_spawn(&pid, "./APPSCRIPT", NULL, &pattr, argv, environ);
+        ret = posix_spawn(&pid, appscript, NULL, &pattr, argv, environ);
         posix_spawnattr_destroy(&pattr);
         if (ret == 0) {
             child_pid = pid;
